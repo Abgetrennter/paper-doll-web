@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>纸娃娃换装机（重写版）</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 13px/1.5 "Microsoft YaHei", sans-serif;
+    display: flex; height: 100vh; background: #f0f0f0;
+  }
+  #panel {
+    width: 360px; min-width: 360px; background: #fafafa; border-right: 1px solid #ccc;
+    padding: 8px; overflow-y: auto;
+  }
+  #stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; }
+  #canvas { box-shadow: 0 0 8px rgba(0,0,0,.25); }
+  fieldset { border: 1px solid #ccc; margin: 0 0 8px; border-radius: 4px; }
+  legend { font-weight: bold; color: #333; padding: 0 4px; }
+  .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .row label { width: 76px; text-align: right; color: #555; flex: none; }
+  .row select, .row input { flex: 1; min-width: 0; }
+  #accList { width: 100%; height: 90px; }
+  button { padding: 2px 10px; }
+  #status { color: #888; font-size: 12px; margin-top: 6px; white-space: pre-wrap; }
+  h1 { font-size: 15px; margin: 2px 0 8px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1>纸娃娃换装机 <small style="color:#999">重写版 M1</small></h1>
+  <fieldset id="loadBox">
+    <legend>1. 载入素材</legend>
+    <input type="file" id="dirPicker" webkitdirectory multiple>
+    <button id="devLoad" class="hidden">载入服务器数据（dev）</button>
+    <div id="status">请选择原程序的 data 文件夹（内含 kaoruset 等角色集目录）。</div>
+  </fieldset>
+
+  <div id="mainUI" class="hidden">
+  <fieldset>
+    <legend>2. 角色集</legend>
+    <div class="row"><label>角色集</label><select id="setSel"></select></div>
+    <div class="row"><label>说明</label><span id="setInfo" style="color:#666"></span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. 部件</legend>
+    <div id="partRows"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. 饰品</legend>
+    <div class="row"><label>可添加</label><select id="accPool"></select></div>
+    <div class="row"><button id="accAdd">添加</button><button id="accRemove">移除</button>
+      <button id="accUp">↑前移</button><button id="accDown">↓后移</button></div>
+    <select id="accList" multiple></select>
+  </fieldset>
+
+  <fieldset>
+    <legend>5. 颜色</legend>
+    <div class="row"><label>发色</label><select id="hairRgb"></select></div>
+    <div class="row"><label>发色明暗</label><select id="hairContrast"></select></div>
+    <div class="row"><label>瞳色</label><select id="eyeRgb"></select></div>
+    <div class="row"><label>瞳色明暗</label><select id="eyeContrast"></select></div>
+    <div class="row"><label>肤色</label><select id="skinRgb"></select></div>
+    <div class="row"><label>肤色明暗</label><select id="skinContrast"></select></div>
+    <div class="row"><label>服色</label><select id="bodyRgb"></select></div>
+    <div class="row"><label>服色明暗</label><select id="bodyContrast"></select></div>
+    <div class="row"><label>背景</label><input type="color" id="bgColor" value="#ffffff"></div>
+  </fieldset>
+  </div>
+</div>
+<div id="stage"><canvas id="canvas" width="300" height="400"></canvas></div>
+
+<script src="codetable.js"></script>
+<script src="png.js"></script>
+<script src="paperdoll.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  'use strict';
+  const PD = globalThis.PaperDoll;
+  const APP = globalThis.PaperDollApp;
+  const $ = id => document.getElementById(id);
+
+  // ---------- 载入（目录选择） ----------
+  $('dirPicker').addEventListener('change', async e => {
+    await loadAndShow([...e.target.files]);
+  });
+
+  async function loadAndShow(entries) {
+    await APP.loadFromEntries(entries, msg => { $('status').textContent = msg; });
+    if (!APP.state.loaded) return;
+    $('setSel').innerHTML = [...APP.state.sets.keys()].map(n => `<option>${n}</option>`).join('');
+    $('mainUI').classList.remove('hidden');
+    selectSet([...APP.state.sets.keys()][0]);
+  }
+
+  // ---------- dev 模式（仅 http(s) + ?dev=1 时显示，供自动化测试拉取本机数据） ----------
+  if (location.protocol.startsWith('http') && location.search.includes('dev=1')) {
+    const btn = $('devLoad');
+    btn.classList.remove('hidden');
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const manifest = await (await fetch('test-manifest.json')).json();
+        const entries = manifest.map(e => ({
+          webkitRelativePath: e.rel,
+          arrayBuffer: async () => (await fetch(e.url)).arrayBuffer(),
+        }));
+        await loadAndShow(entries);
+      } catch (err) {
+        $('status').textContent = 'dev 载入失败: ' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  // ---------- 角色集切换 ----------
+  $('setSel').addEventListener('change', () => selectSet($('setSel').value));
+
+  function selectSet(name) {
+    APP.selectSet(name);
+    const set = APP.state.sets.get(name);
+    if (!set) return;
+    $('setInfo').textContent = (set.readme || '').trim() || '（无说明）';
+    buildPartRows();
+    refreshAccPool();
+    syncColorControls();
+    render();
+  }
+
+  // ---------- 部件行 ----------
+  const PART_LABELS = { hair_front: '头发（前）', hair_back: '头发（后）', head: '头部', face: '表情', eye: '眼睛', body: '身体' };
+
+  function buildPartRows() {
+    const set = APP.state.sets.get(APP.state.current);
+    const box = $('partRows');
+    box.innerHTML = '';
+    for (const key of Object.keys(PD.KEY_FOLDERS)) {
+      const baseFolder = PD.BASE_LAYERS[key];
+      const pool = set.folders.get(baseFolder);
+      if (!pool || !pool.size) continue;
+      const row = document.createElement('div');
+      row.className = 'row';
+      const label = document.createElement('label');
+      label.textContent = PART_LABELS[key];
+      const sel = document.createElement('select');
+      sel.dataset.key = key;
+      const names = [...pool.keys()].sort();
+      const cur = APP.state.parts[key];
+      sel.innerHTML = '<option value="">（无）</option>' + names.map(n => `<option${n === cur ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
+      sel.addEventListener('change', () => { APP.state.parts[key] = sel.value; render(); });
+      row.append(label, sel);
+      box.append(row);
+    }
+  }
+
+  function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  // ---------- 饰品 ----------
+  function refreshAccPool() {
+    const set = APP.state.sets.get(APP.state.current);
+    const pool = set.folders.get('accessory_back');
+    const names = pool ? [...pool.keys()].sort() : [];
+    $('accPool').innerHTML = names.map(n => `<option>${escapeHtml(n)}</option>`).join('');
+    $('accList').innerHTML = APP.state.accessories.map(n => `<option>${escapeHtml(n)}</option>`).join('');
+  }
+  $('accAdd').addEventListener('click', () => {
+    const n = $('accPool').value;
+    if (!n) return;
+    if (APP.state.accessories.length >= PD.ACCESSORY_MAX) { alert(`饰品最多 ${PD.ACCESSORY_MAX} 个。`); return; }
+    APP.state.accessories.push(n);
+    refreshAccPool(); render();
+  });
+  $('accRemove').addEventListener('click', () => {
+    const idx = [...$('accList').selectedOptions].map(o => APP.state.accessories.indexOf(o.textContent));
+    APP.state.accessories = APP.state.accessories.filter((n, i) => !idx.includes(i));
+    refreshAccPool(); render();
+  });
+  $('accUp').addEventListener('click', () => moveAcc(-1));
+  $('accDown').addEventListener('click', () => moveAcc(1));
+  function moveAcc(delta) {
+    const sel = $('accList').selectedIndex;
+    if (sel < 0) return;
+    const to = sel + delta;
+    if (to < 0 || to >= APP.state.accessories.length) return;
+    const a = APP.state.accessories;
+    [a[sel], a[to]] = [a[to], a[sel]];
+    refreshAccPool();
+    $('accList').selectedIndex = to;
+    render();
+  }
+
+  // ---------- 颜色 ----------
+  const HAIR_NAMES = ['蓝', '紫', '红', '黄', '绿', '浅蓝', '黑', '白', '棕', '橙', '粉'];
+  const SKIN_NAMES = ['标准', '褐色', '黄', '日晒', '不健康'];
+  const SHADE_NAMES = ['+3', '+2', '+1', '标准', '-1', '-2', '-3'];
+
+  function fillSel(id, items, value, key) {
+    const sel = $(id);
+    sel.innerHTML = items.map((label, i) => `<option value="${i}">${label}</option>`).join('');
+    sel.value = value;
+    sel.addEventListener('change', () => { APP.state.colors[key] = parseInt(sel.value, 10); render(); });
+  }
+  function syncColorControls() {
+    const c = APP.state.colors;
+    const set = (id, items, v) => { const s = $(id); s.innerHTML = items.map((l, i) => `<option value="${i}">${l}</option>`).join(''); s.value = v; };
+    set('hairRgb', HAIR_NAMES, c.hairRgb); set('hairContrast', SHADE_NAMES, c.hairContrast);
+    set('eyeRgb', HAIR_NAMES.slice(0, 8), c.eyeRgb); set('eyeContrast', SHADE_NAMES, c.eyeContrast);
+    set('skinRgb', SKIN_NAMES, c.skinRgb); set('skinContrast', SHADE_NAMES, c.skinContrast);
+    set('bodyRgb', HAIR_NAMES.slice(0, 8), c.bodyRgb); set('bodyContrast', SHADE_NAMES, c.bodyContrast);
+  }
+  fillSel('hairRgb', HAIR_NAMES, APP.state.colors.hairRgb, 'hairRgb');
+  fillSel('hairContrast', SHADE_NAMES, APP.state.colors.hairContrast, 'hairContrast');
+  fillSel('eyeRgb', HAIR_NAMES.slice(0, 8), APP.state.colors.eyeRgb, 'eyeRgb');
+  fillSel('eyeContrast', SHADE_NAMES, APP.state.colors.eyeContrast, 'eyeContrast');
+  fillSel('skinRgb', SKIN_NAMES, APP.state.colors.skinRgb, 'skinRgb');
+  fillSel('skinContrast', SHADE_NAMES, APP.state.colors.skinContrast, 'skinContrast');
+  fillSel('bodyRgb', HAIR_NAMES.slice(0, 8), APP.state.colors.bodyRgb, 'bodyRgb');
+  fillSel('bodyContrast', SHADE_NAMES, APP.state.colors.bodyContrast, 'bodyContrast');
+  $('bgColor').addEventListener('input', () => {
+    const v = $('bgColor').value;
+    APP.state.bg = [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+    render();
+  });
+
+  // ---------- 渲染入口 ----------
+  function render() { APP.renderTo($('canvas')); }
+})();
+</script>
+</body>
+</html>

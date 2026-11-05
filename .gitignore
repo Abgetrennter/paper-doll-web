@@ -1,0 +1,8 @@
+# 本地/临时产物不入库
+test/matrix/
+test/*.png
+test/*.json
+test/*.txt
+*.pyc
+__pycache__/
+Thumbs.db
