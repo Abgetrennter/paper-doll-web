@@ -34,6 +34,22 @@
 
 所有数据均在本地处理，不上传任何内容。
 
+### 素材从哪里获取
+
+本工具不含任何素材，请从原作者 kaoru 的配布站 **幻想幽玄庵** 下载：
+
+- 配布站首页：<http://gensoukyou.1000.tv/>（站内「利用規約」页有完整使用条款）
+- 立绘素材下载页：<http://gensoukyou.1000.tv/dl.html>
+  - 「**キャラクターなんとか機素材_1**」（女の子セット，即 `kaoruset`）→ `dl/chara_set_01.zip`
+  - 「**キャラクターなんとか機素材_2**」（男セット原型，即 `kaoru_set_male00`）→ `dl/chara_set_m00.zip`
+  - 同页还按作品配布大量立绘（紅魔郷／妖々夢／地霊殿／ネブラ装備等）与
+    [CharacterManaJ](https://charactermanaj.sourceforge.io/) 格式角色集
+- 作者 pixiv：<https://www.pixiv.net/users/743845>
+
+使用条款（摘要，以配布站原文为准）：可自由使用与加工；**禁止商业用途**（含同人）、
+禁止将素材原样作为自己制作的素材转投、禁止用于商用软件的改造部件、禁止 CapCut。
+站点服务器较不稳定，如无法访问可经 [Wayback Machine](https://web.archive.org/web/20240417122837/http://gensoukyou.1000.tv/dl.html) 查看页面存档。
+
 ## 渲染一致性验证
 
 `test/` 内含一套独立实现的 Python 参考渲染器（直接由反编译规格写出）与自动化比对脚本：
