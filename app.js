@@ -21,11 +21,15 @@
   // ============ 载入 ============
 
   // entries: [{ webkitRelativePath, arrayBuffer() }]
-  // 支持两种选择：data 文件夹（set/folder/file）或项目根目录（data/set/folder/file + profile/x.dat）
-  async function loadFromEntries(entries, onProgress) {
-    const sets = new Map();
+  // 路径归一化：从任意深度的目录树中发现角色集。
+  // 倒序寻找第一个「已知图层文件夹」段，其上一段即角色集名；无图层段时视作
+  // set 根下的元文件（character.ini / readme.txt / character.xml / profile/*.dat）。
+  // 因此：选整个 ThCRP、选 data、选单个角色集文件夹，都能正确识别。
+  async function loadFromEntries(entries, onProgress, opts) {
+    const merge = opts && opts.merge;
+    const sets = merge ? state.sets : new Map();
     const profiles = new Map();
-    let pngCount = 0, iniCount = 0, rootName = '';
+    let pngCount = 0, iniCount = 0, xmlCount = 0, rootName = '';
     for (const f of entries) {
       const rel = f.webkitRelativePath || f.name || '';
       const seg = rel.split('/');
@@ -35,12 +39,21 @@
         try { profiles.set(setName, sjis.decode(await f.arrayBuffer())); } catch (err) {}
         continue;
       }
-      let setName, folder, fileName;
-      if (seg.length >= 5 && seg[1] === 'data') { setName = seg[2]; folder = seg[3]; fileName = seg[4]; }
-      else if (seg.length === 4) { setName = seg[1]; folder = seg[2]; fileName = seg[3]; }
-      else if (seg.length === 3) { setName = seg[1]; folder = null; fileName = seg[2]; }
-      else continue;
-      if (folder === null && !/^(character\.ini|readme\.txt|character\.xml)$/i.test(fileName)) continue;
+      const fileName = seg[seg.length - 1];
+      if (!/\.png$/i.test(fileName) && !/^(character\.ini|readme\.txt|character\.xml)$/i.test(fileName)) continue;
+      let folderIdx = -1;
+      for (let i = seg.length - 2; i >= 0; i--) {
+        if (PD.COMPOSITE_PLAN.some(p => p.layer === seg[i])) { folderIdx = i; break; }
+      }
+      let setName, folder;
+      if (folderIdx > 0) {
+        setName = seg[folderIdx - 1];
+        folder = seg[folderIdx];
+      } else {
+        folder = null;
+        if (seg.length < 2) continue;
+        setName = seg[seg.length - 2];
+      }
       if (!sets.has(setName)) {
         sets.set(setName, { folders: new Map(), size: [300, 400], parts: {}, colors: {}, accDefault: [], readme: '', profile: null });
       }
@@ -94,6 +107,7 @@
             break;
           }
           set.xmlRead = true;
+          xmlCount++;
         } catch (err) { /* xml 解析失败不致命 */ }
         continue;
       }
@@ -127,7 +141,7 @@
     }
     state.sets = sets;
     state.loaded = sets.size > 0;
-    const msg = `已载入 ${sets.size} 个角色集，${pngCount} 个部件，${iniCount} 个 character.ini，${profiles.size} 个存档（根目录：${rootName}）`;
+    const msg = `已载入 ${sets.size} 个角色集（${pngCount} 个部件，${iniCount} 个 character.ini，${xmlCount} 个 character.xml，${profiles.size} 个存档）。本次扫描根：${rootName}。可继续选择其他文件夹追加载入。`;
     state.status = msg;
     if (onProgress) onProgress(msg);
     return sets;

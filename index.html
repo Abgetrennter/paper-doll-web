@@ -50,7 +50,7 @@
       <legend>载入素材</legend>
       <input type="file" id="dirPicker" webkitdirectory multiple>
       <button id="devLoad" class="hidden">载入服务器数据（dev）</button>
-      <div id="status">请选择原程序的 data 文件夹（或包含 data 与 profile 的项目根目录）。</div>
+      <div id="status">选择包含角色集的任意文件夹即可：整个 data、某个角色集文件夹、或包含多套素材的上层目录（如 ThCRP）都可以。可多次选择不同文件夹，角色集会追加合并。</div>
     </fieldset>
 
     <div id="mainUI" class="hidden">
@@ -121,20 +121,28 @@
   });
 
   async function loadAndShow(entries) {
-    await APP.loadFromEntries(entries, msg => { $('status').textContent = msg; });
+    const prev = APP.state.current;
+    await APP.loadFromEntries(entries, msg => { $('status').textContent = msg; }, { merge: true });
     if (!APP.state.loaded) return;
-    $('setSel').innerHTML = [...APP.state.sets.keys()].map(n => `<option>${n}</option>`).join('');
+    const names = [...APP.state.sets.keys()];
+    $('setSel').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     $('mainUI').classList.remove('hidden');
     for (const id of ['btnOpen', 'btnSave', 'sep1', 'fmtSel', 'btnShot', 'btnAlpha', 'btnUka']) {
       $(id).classList.remove('hidden');
     }
-    const restored = APP.restoreState();
-    if (restored) {
-      $('setSel').value = restored;
+    if (prev && APP.state.sets.has(prev)) {
+      // 追加载入：保持当前选择不变
+      $('setSel').value = prev;
       refreshAll();
-      $('status').textContent = APP.state.status + '\n已恢复上次的设定。';
     } else {
-      selectSet([...APP.state.sets.keys()][0]);
+      const restored = APP.restoreState();
+      if (restored) {
+        $('setSel').value = restored;
+        refreshAll();
+        $('status').textContent = APP.state.status + '\n已恢复上次的设定。';
+      } else {
+        selectSet(names[0]);
+      }
     }
   }
 
