@@ -38,6 +38,7 @@
   <button id="btnOpen" class="hidden" title="Ctrl+O">打开设定…</button>
   <input type="file" id="settingsFile" accept=".json,.dat,.cpd" class="hidden">
   <button id="btnSave" class="hidden" title="Ctrl+S">保存设定</button>
+  <button id="btnReset" class="hidden">恢复默认外观</button>
   <span class="sep hidden" id="sep1"></span>
   <select id="fmtSel" class="hidden"><option value="png">PNG</option><option value="jpg">JPEG</option><option value="bmp">BMP</option></select>
   <button id="btnShot" class="hidden" title="F5">保存预览图</button>
@@ -127,7 +128,7 @@
     const names = [...APP.state.sets.keys()];
     $('setSel').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     $('mainUI').classList.remove('hidden');
-    for (const id of ['btnOpen', 'btnSave', 'sep1', 'fmtSel', 'btnShot', 'btnAlpha', 'btnUka']) {
+    for (const id of ['btnOpen', 'btnSave', 'btnReset', 'sep1', 'fmtSel', 'btnShot', 'btnAlpha', 'btnUka']) {
       $(id).classList.remove('hidden');
     }
     if (prev && APP.state.sets.has(prev)) {
@@ -338,6 +339,13 @@
 
   // ---------- 渲染入口 ----------
   function render() { APP.renderTo($('canvas')); }
+
+  // 恢复默认外观：重新应用当前角色集的 ini/xml 默认值并清掉手动改动
+  $('btnReset').addEventListener('click', () => {
+    selectSet(APP.state.current);
+    try { localStorage.removeItem('paper-doll-web-state'); } catch (err) {}
+    $('status').textContent = '已恢复当前角色集的默认外观。';
+  });
 })();
 </script>
 </body>
