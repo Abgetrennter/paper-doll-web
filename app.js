@@ -40,7 +40,8 @@
         continue;
       }
       const fileName = seg[seg.length - 1];
-      if (!/\.png$/i.test(fileName) && !/^(character\.ini|readme\.txt|character\.xml)$/i.test(fileName)) continue;
+      const isMeta = /^(character\.ini|readme\.txt|character\.xml)$/i.test(fileName);
+      if (!isMeta && !/\.png$/i.test(fileName)) continue;
       let folderIdx = -1;
       for (let i = seg.length - 2; i >= 0; i--) {
         if (PD.COMPOSITE_PLAN.some(p => p.layer === seg[i])) { folderIdx = i; break; }
@@ -49,10 +50,13 @@
       if (folderIdx > 0) {
         setName = seg[folderIdx - 1];
         folder = seg[folderIdx];
-      } else {
+      } else if (isMeta && seg.length >= 2) {
+        // set 根下的元文件
         folder = null;
-        if (seg.length < 2) continue;
         setName = seg[seg.length - 2];
+      } else {
+        // 不在任何图层文件夹里的 PNG（如全身立绘、preview.png）：与部件无关，忽略
+        continue;
       }
       if (!sets.has(setName)) {
         sets.set(setName, { folders: new Map(), size: [300, 400], parts: {}, colors: {}, accDefault: [], readme: '', profile: null });
@@ -138,6 +142,10 @@
       const text = profiles.get(setName);
       if (!text) continue;
       try { applyProfileToSet(set, PD.parseIni(text)); } catch (err) { /* 回退 ini 默认 */ }
+    }
+    // 丢弃无任何部件文件夹的「集」（如全身立绘差分目录、只有杂文件的同名目录）
+    for (const [n, s] of [...sets]) {
+      if (s.folders.size === 0) sets.delete(n);
     }
     state.sets = sets;
     state.loaded = sets.size > 0;
@@ -271,6 +279,14 @@
     state.colors = { ...state.colors, ...set.colors };
     state.accessories = [...(set.accDefault || [])].map(n => PD.decodeName(n));
     if (set.bg) state.bg = [...set.bg];
+    // 无任何默认部件的集（无 ini/xml 预设）：按基准层逐项选第一个部件，避免空白画布
+    for (const key of Object.keys(PD.KEY_FOLDERS)) {
+      if (state.parts[key]) continue;
+      const pool = set.folders.get(PD.BASE_LAYERS[key]);
+      if (pool && pool.size) {
+        state.parts[key] = [...pool.keys()][0];
+      }
+    }
   }
 
   // ============ 导出 ============
