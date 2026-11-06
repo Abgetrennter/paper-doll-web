@@ -2,77 +2,107 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>纸娃娃换装机（重写版）</title>
+<title>纸娃娃换装机（Web 重写版）</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; font: 13px/1.5 "Microsoft YaHei", sans-serif;
-    display: flex; height: 100vh; background: #f0f0f0;
-  }
-  #panel {
-    width: 360px; min-width: 360px; background: #fafafa; border-right: 1px solid #ccc;
-    padding: 8px; overflow-y: auto;
-  }
+  body { margin: 0; font: 13px/1.5 "Microsoft YaHei", sans-serif; display: flex; flex-direction: column; height: 100vh; background: #f0f0f0; }
+  #top { background: #e8e8e8; border-bottom: 1px solid #ccc; padding: 5px 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #top h1 { font-size: 14px; margin: 0 8px 0 0; display: inline-block; }
+  #top .sep { width: 1px; height: 20px; background: #bbb; margin: 0 4px; }
+  #main { flex: 1; display: flex; min-height: 0; }
+  #panel { width: 380px; min-width: 380px; background: #fafafa; border-right: 1px solid #ccc; padding: 8px; overflow-y: auto; }
   #stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; }
-  #canvas { box-shadow: 0 0 8px rgba(0,0,0,.25); }
+  #canvas { box-shadow: 0 0 8px rgba(0,0,0,.25); background: #fff; }
   fieldset { border: 1px solid #ccc; margin: 0 0 8px; border-radius: 4px; }
   legend { font-weight: bold; color: #333; padding: 0 4px; }
   .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
   .row label { width: 76px; text-align: right; color: #555; flex: none; }
   .row select, .row input { flex: 1; min-width: 0; }
-  #accList { width: 100%; height: 90px; }
+  #accList { width: 100%; height: 110px; }
   button { padding: 2px 10px; }
-  #status { color: #888; font-size: 12px; margin-top: 6px; white-space: pre-wrap; }
-  h1 { font-size: 15px; margin: 2px 0 8px; }
+  #status { color: #888; font-size: 12px; margin-top: 4px; white-space: pre-wrap; }
   .hidden { display: none; }
+  #tabs { display: flex; gap: 2px; margin-bottom: 6px; }
+  #tabs button { flex: 1; padding: 4px 0; border: 1px solid #ccc; background: #e4e4e4; cursor: pointer; }
+  #tabs button.active { background: #fff; font-weight: bold; }
+  .tabpane { border: 1px solid #ccc; border-radius: 4px; padding: 8px; background: #fff; }
+  #readmeBox { white-space: pre-wrap; font-size: 12px; color: #444; background: #f6f6f6; border: 1px solid #ddd; border-radius: 4px; padding: 6px; max-height: 300px; overflow: auto; }
+  kbd { background: #eee; border: 1px solid #ccc; border-radius: 3px; padding: 0 3px; font-size: 11px; }
+  .hint { color: #999; font-size: 11px; margin-top: 4px; }
 </style>
 </head>
 <body>
-<div id="panel">
-  <h1>纸娃娃换装机 <small style="color:#999">重写版 M1</small></h1>
-  <fieldset id="loadBox">
-    <legend>1. 载入素材</legend>
-    <input type="file" id="dirPicker" webkitdirectory multiple>
-    <button id="devLoad" class="hidden">载入服务器数据（dev）</button>
-    <div id="status">请选择原程序的 data 文件夹（内含 kaoruset 等角色集目录）。</div>
-  </fieldset>
-
-  <div id="mainUI" class="hidden">
-  <fieldset>
-    <legend>2. 角色集</legend>
-    <div class="row"><label>角色集</label><select id="setSel"></select></div>
-    <div class="row"><label>说明</label><span id="setInfo" style="color:#666"></span></div>
-  </fieldset>
-
-  <fieldset>
-    <legend>3. 部件</legend>
-    <div id="partRows"></div>
-  </fieldset>
-
-  <fieldset>
-    <legend>4. 饰品</legend>
-    <div class="row"><label>可添加</label><select id="accPool"></select></div>
-    <div class="row"><button id="accAdd">添加</button><button id="accRemove">移除</button>
-      <button id="accUp">↑前移</button><button id="accDown">↓后移</button></div>
-    <select id="accList" multiple></select>
-  </fieldset>
-
-  <fieldset>
-    <legend>5. 颜色</legend>
-    <div class="row"><label>发色</label><select id="hairRgb"></select></div>
-    <div class="row"><label>发色明暗</label><select id="hairContrast"></select></div>
-    <div class="row"><label>瞳色</label><select id="eyeRgb"></select></div>
-    <div class="row"><label>瞳色明暗</label><select id="eyeContrast"></select></div>
-    <div class="row"><label>肤色</label><select id="skinRgb"></select></div>
-    <div class="row"><label>肤色明暗</label><select id="skinContrast"></select></div>
-    <div class="row"><label>服色</label><select id="bodyRgb"></select></div>
-    <div class="row"><label>服色明暗</label><select id="bodyContrast"></select></div>
-    <div class="row"><label>背景</label><input type="color" id="bgColor" value="#ffffff"></div>
-  </fieldset>
-  </div>
+<div id="top">
+  <h1>纸娃娃换装机</h1>
+  <button id="btnOpen" class="hidden" title="Ctrl+O">打开设定…</button>
+  <input type="file" id="settingsFile" accept=".json,.dat,.cpd" class="hidden">
+  <button id="btnSave" class="hidden" title="Ctrl+S">保存设定</button>
+  <span class="sep hidden" id="sep1"></span>
+  <select id="fmtSel" class="hidden"><option value="png">PNG</option><option value="jpg">JPEG</option><option value="bmp">BMP</option></select>
+  <button id="btnShot" class="hidden" title="F5">保存预览图</button>
+  <button id="btnAlpha" class="hidden" title="F6">透明 PNG</button>
+  <button id="btnUka" class="hidden" title="F7">伺か导出</button>
 </div>
-<div id="stage"><canvas id="canvas" width="300" height="400"></canvas></div>
+<div id="main">
+  <div id="panel">
+    <fieldset id="loadBox">
+      <legend>载入素材</legend>
+      <input type="file" id="dirPicker" webkitdirectory multiple>
+      <button id="devLoad" class="hidden">载入服务器数据（dev）</button>
+      <div id="status">请选择原程序的 data 文件夹（或包含 data 与 profile 的项目根目录）。</div>
+    </fieldset>
+
+    <div id="mainUI" class="hidden">
+      <div id="tabs">
+        <button class="tab active" data-tab="parts">部件</button>
+        <button class="tab" data-tab="colors">颜色</button>
+        <button class="tab" data-tab="chara">角色</button>
+      </div>
+      <div id="tab-parts" class="tabpane">
+        <fieldset>
+          <legend>部件</legend>
+          <div id="partRows"></div>
+        </fieldset>
+        <fieldset style="margin:8px 0 0">
+          <legend>饰品</legend>
+          <div class="row"><label>可添加</label><select id="accPool"></select></div>
+          <div class="row">
+            <button id="accAdd">添加</button><button id="accRemove">移除</button>
+            <button id="accUp">↑前移</button><button id="accDown">↓后移</button>
+            <button id="accClear">全部卸下</button>
+          </div>
+          <select id="accList" multiple></select>
+          <div class="hint">饰品最多 6 个；文件名含（髪）（瞳）（肌）（服）的饰品随对应颜色变化。</div>
+        </fieldset>
+      </div>
+      <div id="tab-colors" class="tabpane hidden">
+        <fieldset>
+          <legend>颜色</legend>
+          <div class="row"><label>发色</label><select id="hairRgb"></select></div>
+          <div class="row"><label>发色明暗</label><select id="hairContrast"></select></div>
+          <div class="row"><label>瞳色</label><select id="eyeRgb"></select></div>
+          <div class="row"><label>瞳色明暗</label><select id="eyeContrast"></select></div>
+          <div class="row"><label>肤色</label><select id="skinRgb"></select></div>
+          <div class="row"><label>肤色明暗</label><select id="skinContrast"></select></div>
+          <div class="row"><label>服色</label><select id="bodyRgb"></select></div>
+          <div class="row"><label>服色明暗</label><select id="bodyContrast"></select></div>
+          <div class="row"><label>背景</label><input type="color" id="bgColor" value="#ffffff"></div>
+        </fieldset>
+      </div>
+      <div id="tab-chara" class="tabpane hidden">
+        <div class="row"><label>角色集</label><select id="setSel"></select></div>
+        <div class="hint" style="margin-bottom:6px">切换角色集会应用该角色集的 character.ini 与存档默认值。</div>
+        <div class="row"><label>说明</label></div>
+        <div id="readmeBox">（无说明）</div>
+      </div>
+      <div class="hint">
+        快捷键：<kbd>Ctrl+O</kbd> 打开设定 · <kbd>Ctrl+S</kbd> 保存设定 · <kbd>F5</kbd> 保存预览图 · <kbd>F6</kbd> 透明 PNG · <kbd>F7</kbd> 伺か导出
+      </div>
+    </div>
+  </div>
+  <div id="stage"><canvas id="canvas" width="300" height="400"></canvas></div>
+</div>
 
 <script src="codetable.js"></script>
 <script src="png.js"></script>
@@ -85,7 +115,7 @@
   const APP = globalThis.PaperDollApp;
   const $ = id => document.getElementById(id);
 
-  // ---------- 载入（目录选择） ----------
+  // ---------- 载入（目录选择 / dev 模式） ----------
   $('dirPicker').addEventListener('change', async e => {
     await loadAndShow([...e.target.files]);
   });
@@ -95,7 +125,17 @@
     if (!APP.state.loaded) return;
     $('setSel').innerHTML = [...APP.state.sets.keys()].map(n => `<option>${n}</option>`).join('');
     $('mainUI').classList.remove('hidden');
-    selectSet([...APP.state.sets.keys()][0]);
+    for (const id of ['btnOpen', 'btnSave', 'sep1', 'fmtSel', 'btnShot', 'btnAlpha', 'btnUka']) {
+      $(id).classList.remove('hidden');
+    }
+    const restored = APP.restoreState();
+    if (restored) {
+      $('setSel').value = restored;
+      refreshAll();
+      $('status').textContent = APP.state.status + '\n已恢复上次的设定。';
+    } else {
+      selectSet([...APP.state.sets.keys()][0]);
+    }
   }
 
   // ---------- dev 模式（仅 http(s) + ?dev=1 时显示，供自动化测试拉取本机数据） ----------
@@ -119,17 +159,32 @@
     });
   }
 
+  // ---------- 标签页 ----------
+  document.querySelectorAll('#tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#tabs .tab').forEach(b => b.classList.toggle('active', b === btn));
+      for (const id of ['parts', 'colors', 'chara']) {
+        $('tab-' + id).classList.toggle('hidden', btn.dataset.tab !== id);
+      }
+    });
+  });
+
   // ---------- 角色集切换 ----------
   $('setSel').addEventListener('change', () => selectSet($('setSel').value));
 
   function selectSet(name) {
     APP.selectSet(name);
-    const set = APP.state.sets.get(name);
+    refreshAll();
+  }
+
+  function refreshAll() {
+    const set = APP.state.sets.get(APP.state.current);
     if (!set) return;
-    $('setInfo').textContent = (set.readme || '').trim() || '（无说明）';
+    $('readmeBox').textContent = (set.readme || '').trim() || '（无说明）';
     buildPartRows();
     refreshAccPool();
     syncColorControls();
+    $('bgColor').value = '#' + APP.state.bg.map(v => v.toString(16).padStart(2, '0')).join('');
     render();
   }
 
@@ -143,7 +198,7 @@
     for (const key of Object.keys(PD.KEY_FOLDERS)) {
       const baseFolder = PD.BASE_LAYERS[key];
       const pool = set.folders.get(baseFolder);
-      if (!pool || !pool.size) continue;
+      if (!pool || !pool.size) continue; // 基准层无文件则不显示（与原程序菜单规则一致）
       const row = document.createElement('div');
       row.className = 'row';
       const label = document.createElement('label');
@@ -183,6 +238,10 @@
   });
   $('accUp').addEventListener('click', () => moveAcc(-1));
   $('accDown').addEventListener('click', () => moveAcc(1));
+  $('accClear').addEventListener('click', () => {
+    APP.state.accessories = [];
+    refreshAccPool(); render();
+  });
   function moveAcc(delta) {
     const sel = $('accList').selectedIndex;
     if (sel < 0) return;
@@ -200,32 +259,73 @@
   const SKIN_NAMES = ['标准', '褐色', '黄', '日晒', '不健康'];
   const SHADE_NAMES = ['+3', '+2', '+1', '标准', '-1', '-2', '-3'];
 
-  function fillSel(id, items, value, key) {
-    const sel = $(id);
-    sel.innerHTML = items.map((label, i) => `<option value="${i}">${label}</option>`).join('');
-    sel.value = value;
-    sel.addEventListener('change', () => { APP.state.colors[key] = parseInt(sel.value, 10); render(); });
+  function buildColorSel(id, items) {
+    $(id).innerHTML = items.map((label, i) => `<option value="${i}">${label}</option>`).join('');
   }
   function syncColorControls() {
     const c = APP.state.colors;
-    const set = (id, items, v) => { const s = $(id); s.innerHTML = items.map((l, i) => `<option value="${i}">${l}</option>`).join(''); s.value = v; };
+    const set = (id, items, v) => { buildColorSel(id, items); $(id).value = v; };
     set('hairRgb', HAIR_NAMES, c.hairRgb); set('hairContrast', SHADE_NAMES, c.hairContrast);
     set('eyeRgb', HAIR_NAMES.slice(0, 8), c.eyeRgb); set('eyeContrast', SHADE_NAMES, c.eyeContrast);
     set('skinRgb', SKIN_NAMES, c.skinRgb); set('skinContrast', SHADE_NAMES, c.skinContrast);
     set('bodyRgb', HAIR_NAMES.slice(0, 8), c.bodyRgb); set('bodyContrast', SHADE_NAMES, c.bodyContrast);
   }
-  fillSel('hairRgb', HAIR_NAMES, APP.state.colors.hairRgb, 'hairRgb');
-  fillSel('hairContrast', SHADE_NAMES, APP.state.colors.hairContrast, 'hairContrast');
-  fillSel('eyeRgb', HAIR_NAMES.slice(0, 8), APP.state.colors.eyeRgb, 'eyeRgb');
-  fillSel('eyeContrast', SHADE_NAMES, APP.state.colors.eyeContrast, 'eyeContrast');
-  fillSel('skinRgb', SKIN_NAMES, APP.state.colors.skinRgb, 'skinRgb');
-  fillSel('skinContrast', SHADE_NAMES, APP.state.colors.skinContrast, 'skinContrast');
-  fillSel('bodyRgb', HAIR_NAMES.slice(0, 8), APP.state.colors.bodyRgb, 'bodyRgb');
-  fillSel('bodyContrast', SHADE_NAMES, APP.state.colors.bodyContrast, 'bodyContrast');
+  buildColorSel('hairRgb', HAIR_NAMES);
+  buildColorSel('hairContrast', SHADE_NAMES);
+  buildColorSel('eyeRgb', HAIR_NAMES.slice(0, 8));
+  buildColorSel('eyeContrast', SHADE_NAMES);
+  buildColorSel('skinRgb', SKIN_NAMES);
+  buildColorSel('skinContrast', SHADE_NAMES);
+  buildColorSel('bodyRgb', HAIR_NAMES.slice(0, 8));
+  buildColorSel('bodyContrast', SHADE_NAMES);
+  for (const [id, key] of [
+    ['hairRgb', 'hairRgb'], ['hairContrast', 'hairContrast'],
+    ['eyeRgb', 'eyeRgb'], ['eyeContrast', 'eyeContrast'],
+    ['skinRgb', 'skinRgb'], ['skinContrast', 'skinContrast'],
+    ['bodyRgb', 'bodyRgb'], ['bodyContrast', 'bodyContrast'],
+  ]) {
+    $(id).addEventListener('change', () => { APP.state.colors[key] = parseInt($(id).value, 10); render(); });
+  }
   $('bgColor').addEventListener('input', () => {
     const v = $('bgColor').value;
     APP.state.bg = [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
     render();
+  });
+
+  // ---------- 设定 IO ----------
+  $('btnOpen').addEventListener('click', () => $('settingsFile').click());
+  $('settingsFile').addEventListener('change', async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const msg = await APP.importSettingsFile(f);
+    $('status').textContent = msg;
+    if (msg.startsWith('已载入')) {
+      $('setSel').value = APP.state.current;
+      refreshAll();
+    }
+    e.target.value = '';
+  });
+  $('btnSave').addEventListener('click', () => {
+    APP.downloadBlob(
+      new Blob([JSON.stringify(APP.serializeState(), null, 2)], { type: 'application/json' }),
+      (APP.state.current || 'character') + '.json'
+    );
+    $('status').textContent = '已保存设定 JSON。';
+  });
+
+  // ---------- 导出 ----------
+  $('btnShot').addEventListener('click', async () => { $('status').textContent = await APP.exportPreview($('fmtSel').value); });
+  $('btnAlpha').addEventListener('click', async () => { $('status').textContent = await APP.exportTransparent(); });
+  $('btnUka').addEventListener('click', async () => { $('status').textContent = await APP.exportUkagaka(); });
+
+  // ---------- 快捷键（与原程序一致：Ctrl+O / Ctrl+S / F5 / F6 / F7） ----------
+  window.addEventListener('keydown', e => {
+    if (!APP.state.loaded) return;
+    if (e.key === 'F5') { e.preventDefault(); $('btnShot').click(); }
+    else if (e.key === 'F6') { e.preventDefault(); $('btnAlpha').click(); }
+    else if (e.key === 'F7') { e.preventDefault(); $('btnUka').click(); }
+    else if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'o') { e.preventDefault(); $('btnOpen').click(); }
+    else if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); $('btnSave').click(); }
   });
 
   // ---------- 渲染入口 ----------
