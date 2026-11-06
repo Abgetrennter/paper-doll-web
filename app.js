@@ -40,7 +40,7 @@
       else if (seg.length === 4) { setName = seg[1]; folder = seg[2]; fileName = seg[3]; }
       else if (seg.length === 3) { setName = seg[1]; folder = null; fileName = seg[2]; }
       else continue;
-      if (folder === null && !/^(character\.ini|readme\.txt)$/i.test(fileName)) continue;
+      if (folder === null && !/^(character\.ini|readme\.txt|character\.xml)$/i.test(fileName)) continue;
       if (!sets.has(setName)) {
         sets.set(setName, { folders: new Map(), size: [300, 400], parts: {}, colors: {}, accDefault: [], readme: '', profile: null });
       }
@@ -48,6 +48,7 @@
       if (/^character\.ini$/i.test(fileName)) {
         try {
           applyIniToSet(set, sjis.decode(await f.arrayBuffer()));
+          set.sizeFromIni = true;
           iniCount++;
         } catch (err) { /* ini 解析失败不致命 */ }
         continue;
@@ -56,12 +57,67 @@
         try { set.readme = sjis.decode(await f.arrayBuffer()); } catch (err) {}
         continue;
       }
+      if (/^character\.xml$/i.test(fileName)) {
+        // CharacterManaJ 格式：画布尺寸、说明、默认预设（部件/饰品/背景色）
+        try {
+          const doc = new DOMParser().parseFromString(new TextDecoder('utf-8').decode(await f.arrayBuffer()), 'application/xml');
+          const sz = doc.getElementsByTagName('image-size')[0];
+          if (sz) {
+            const w = parseInt(sz.getElementsByTagName('width')[0].textContent, 10);
+            const h = parseInt(sz.getElementsByTagName('height')[0].textContent, 10);
+            if (w > 0 && h > 0) { set.size = [w, h]; set.sizeFromXml = true; }
+          }
+          const desc = doc.getElementsByTagName('description')[0];
+          if (desc) set.readme = desc.textContent;
+          // 默认预设：category refid 与我们的部件键同名，accessory 转饰品列表
+          const presets = doc.getElementsByTagName('preset');
+          const defId = doc.getElementsByTagName('presets')[0]?.getAttribute('default-preset');
+          for (const p of presets) {
+            if (p.getAttribute('id') !== defId) continue;
+            const bgEl = p.getElementsByTagName('background-color')[0];
+            if (bgEl) {
+              const hex = (bgEl.getAttribute('color') || '').replace('#', '');
+              if (/^[0-9a-f]{6}$/i.test(hex)) {
+                set.bg = [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+              }
+            }
+            for (const cat of p.getElementsByTagName('category')) {
+              const ref = cat.getAttribute('refid');
+              const names = [...cat.getElementsByTagName('parts')].map(el => el.getAttribute('name')).filter(Boolean);
+              if (!names.length) continue;
+              if (ref === 'accessory') {
+                set.accDefault = names.map(n => PD.decodeName(n));
+              } else if (['hair_front', 'hair_back', 'head', 'face', 'eye', 'body'].includes(ref)) {
+                set.parts[ref] = PD.decodeName(names[0]);
+              }
+            }
+            break;
+          }
+          set.xmlRead = true;
+        } catch (err) { /* xml 解析失败不致命 */ }
+        continue;
+      }
       if (!/\.png$/i.test(fileName)) continue;
       if (!PD.COMPOSITE_PLAN.some(p => p.layer === folder)) continue;
       const decoded = PD.decodeName(fileName.replace(/\.png$/i, ''));
       if (!set.folders.has(folder)) set.folders.set(folder, new Map());
       set.folders.get(folder).set(decoded, f);
+      if (!set.firstPng) set.firstPng = f;
       pngCount++;
+    }
+    // 无 character.ini 的角色集（如 CharacterManaJ 格式）：从首个部件 PNG 的 IHDR 推画布尺寸
+    for (const [, set] of sets) {
+      if (!set.sizeFromIni && !set.sizeFromXml && set.firstPng) {
+        try {
+          const u8 = new Uint8Array(await set.firstPng.arrayBuffer());
+          const w = (u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19];
+          const h = (u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23];
+          if (w > 0 && h > 0) set.size = [w, h];
+        } catch (err) { /* 保持默认 */ }
+      }
+      delete set.firstPng;
+      delete set.sizeFromIni;
+      delete set.sizeFromXml;
     }
     // 应用存档（原程序启动时自动加载 profile\<set>.dat）
     for (const [setName, set] of sets) {

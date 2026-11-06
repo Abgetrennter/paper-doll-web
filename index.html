@@ -145,7 +145,7 @@
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       try {
-        const manifest = await (await fetch('test-manifest.json')).json();
+        const manifest = await (await fetch('test-manifest.json', { cache: 'reload' })).json();
         const entries = manifest.map(e => ({
           webkitRelativePath: e.rel,
           arrayBuffer: async () => (await fetch(e.url)).arrayBuffer(),
